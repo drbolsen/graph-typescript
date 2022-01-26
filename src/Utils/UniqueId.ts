@@ -4,6 +4,11 @@ const k4 = () => {
     .substring(1);
 };
 
-export const uniqueId = () => {
-  return `${k4()}${k4()}-${k4()}-${k4()}-${k4()}-${k4()}${k4()}${k4()}`
-}
+export const uniqueId =
+  window && window.crypto && window.crypto.randomUUID
+    ? (): string => {
+        return window.crypto.randomUUID();
+      }
+    : (): string => {
+        return `${k4()}${k4()}-${k4()}-${k4()}-${k4()}-${k4()}${k4()}${k4()}`;
+      };
