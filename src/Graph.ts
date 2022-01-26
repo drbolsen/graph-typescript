@@ -1,16 +1,16 @@
 import { Events } from "./Events";
-import { LinkId, NodeId } from "./Identity";
-import { Link } from "./Link";
-import { Node } from "./Node";
+import { VertexId, EdgeId } from "./Identity";
+import { Vertex } from "./Vertex";
+import { Edge } from "./Edge";
 import { uniqueId } from "./Utils/UniqueId";
 
-export type MaybeNode = Node | undefined;
-export type MaybeLink = Link | undefined;
+export type MaybeEdge = Edge | undefined;
+export type MaybeVertex = Vertex | undefined;
 
 export class Graph extends Events {
-  private _nodes: Map<NodeId, Node> = new Map();
-  private _links: Map<LinkId, Link> = new Map();
-  private _multiEdge: Map<LinkId, Set<number>> = new Map();
+  private _edges: Map<EdgeId, Edge> = new Map();
+  private _vertices: Map<VertexId, Vertex> = new Map();
+  private _multiEdge: Map<VertexId, Set<number>> = new Map();
   private _suspendEvents = 0;
   private _multiGraph: boolean;
 
@@ -27,39 +27,57 @@ export class Graph extends Events {
     this._suspendEvents -= 1;
   }
 
-  public hasNode(nodeId?: NodeId): boolean {
-    return !nodeId ? false : this._nodes.has(nodeId);
+  public hasEdge(edgeId?: EdgeId): boolean {
+    return !edgeId ? false : this._edges.has(edgeId);
   }
-  public getNode(nodeId: NodeId): MaybeNode {
-    return this._nodes.get(nodeId);
+  public getEdge(edgeId: EdgeId): MaybeEdge {
+    return this._edges.get(edgeId);
   }
-  public getNodeCount(): number {
-    return this._nodes.size;
+  public getEdgesCount(): number {
+    return this._edges.size;
   }
-  public getNodeLinks(nodeId: NodeId): Link[] {
-    return this.hasNode(nodeId) ? (this.getNode(nodeId) as Node).links : [];
-  }
-
-  public hasLink(linkId?: string): boolean {
-    return !linkId ? false : this._links.has(linkId);
-  }
-  public getLink(linkId: string): MaybeLink {
-    return this._links.get(linkId);
-  }
-  public getLinkCount(): number {
-    return this._links.size;
+  public getEdgeVertices(edgeId: EdgeId): Vertex[] {
+    return this.hasEdge(edgeId) ? (this.getEdge(edgeId) as Edge).vertices : [];
   }
 
-  public addNode(nodeId?: NodeId, data?: any): Node {
+  public hasVertex(vertexId?: string): boolean {
+    return !vertexId ? false : this._vertices.has(vertexId);
+  }
+  public getVertexById(vertexId: string): MaybeVertex {
+    return this._vertices.get(vertexId);
+  }
+  public getVertex(fromEdgeId: EdgeId, toEdgeId: EdgeId): MaybeVertex {
+    const vertexId = Graph.createVertexId(fromEdgeId, toEdgeId);
+    const multiEdge = this._multiEdge.get(vertexId);
+    const hasSiblings = !!multiEdge && multiEdge.size > 1;
+    return undefined;
+  }
+  public getVerticesCount(): number {
+    return this._vertices.size;
+  }
+  public getVertexNodes(vertexId: VertexId): [EdgeId?, EdgeId?] {
+    if (!this._vertices.has(vertexId)) {
+      return [];
+    }
+    const { from, to } = this._vertices.get(vertexId) as Vertex;
+    return [from, to];
+  }
+  public getVertexSiblings(vertexId: VertexId): any[] {
+    const [vertex] = Vertex.parseVertexId(vertexId);
+    const v = this._multiEdge.get(vertex)?.values() || []
+    return Array.from(v).map(idx => `${vertex}@${idx}`)
+  }
+
+  public addEdge(edgeId?: EdgeId, data?: any): Edge {
     this.disableChanges();
-    const isNodeExist: boolean = this.hasNode(nodeId);
+    const isNodeExist: boolean = this.hasEdge(edgeId);
 
     const node = isNodeExist
-      ? (this.getNode(nodeId as string) as Node)
-      : new Node(nodeId || uniqueId());
+      ? (this.getEdge(edgeId as string) as Edge)
+      : new Edge(edgeId || uniqueId());
 
     node.data = data;
-    this._nodes.set(node.id, node);
+    this._edges.set(node.id, node);
 
     this.recordNodeEvent(node, isNodeExist ? "update" : "add");
 
@@ -67,17 +85,17 @@ export class Graph extends Events {
 
     return node;
   }
-  public addLink(fromNodeId: string, toNodeId: string, data?: any): Link {
+  public addVertex(fromEdgeId: EdgeId, toEdgeId: EdgeId, data?: any): Vertex {
     this.enableChanges();
 
-    const fromNode = this.hasNode(fromNodeId)
-      ? (this.getNode(fromNodeId) as Node)
-      : this.addNode(fromNodeId);
-    const toNode = this.hasNode(toNodeId)
-      ? (this.getNode(toNodeId) as Node)
-      : this.addNode(toNodeId);
+    const fromNode = this.hasEdge(fromEdgeId)
+      ? (this.getEdge(fromEdgeId) as Edge)
+      : this.addEdge(fromEdgeId);
+    const toNode = this.hasEdge(toEdgeId)
+      ? (this.getEdge(toEdgeId) as Edge)
+      : this.addEdge(toEdgeId);
 
-    const multiEdgeLinkIdx = Graph.makeLinkId(fromNode.id, toNode.id);
+    const multiEdgeLinkIdx = Graph.createVertexId(fromNode.id, toNode.id);
     // No previous multi edge exists
     if (!this._multiEdge.has(multiEdgeLinkIdx)) {
       this._multiEdge.set(multiEdgeLinkIdx, new Set([]));
@@ -85,43 +103,47 @@ export class Graph extends Events {
 
     const idx = this._multiEdge.get(multiEdgeLinkIdx)?.size as number;
     this._multiEdge.get(multiEdgeLinkIdx)?.add(idx);
-    const linkId = Graph.makeLinkId(
-      `${fromNode.id}@${idx}`,
-      `${toNode.id}@${idx}`
-    );
+    const linkId = Graph.createVertexId(fromNode.id, toNode.id, idx);
 
-    const isExist = this._links.has(linkId);
+    const isExist = this._vertices.has(linkId);
     const link = isExist
-      ? (this._links.get(linkId) as Link)
-      : new Link(linkId, fromNode.id, toNode.id, data);
+      ? (this._vertices.get(linkId) as Vertex)
+      : new Vertex(linkId, fromNode.id, toNode.id, data);
 
     link.data = data;
 
-    this._links.set(linkId, link);
-    fromNode.addLink(link);
+    this._vertices.set(linkId, link);
+    fromNode.addVertex(link);
     if (fromNode.id !== toNode.id) {
-      toNode.addLink(link);
+      toNode.addVertex(link);
     }
     this.recordLinkEvent(link, isExist ? "update" : "add");
 
     this.disableChanges();
     return link;
   }
-
-  removeNode(nodeId?: string): boolean {
-    if (!nodeId || !this.hasNode(nodeId)) return false;
-
+  public removeEdge(edgeId?: EdgeId): boolean {
+    if (!edgeId || !this.hasEdge(edgeId)) return false;
     this.enableChanges();
 
-    const links = this.getNode(nodeId)?.links;
+    const edge = this.getEdge(edgeId) as Edge;
 
-    links?.forEach((link) => {});
+    edge.vertices.forEach((link) => {
+      this.removeVertex(link)
+    });
+
+    edge.clearVertices();
 
     this.disableChanges();
     return true;
   }
 
-  removeLink(): void {}
+  public removeVertex(a: Vertex): void
+  public removeVertex(a: EdgeId, b?: EdgeId): void
+  public removeVertex(a: any, b?: any): void {
+    const vertexId = a instanceof Vertex ? a.id : Graph.createVertexId(a, b);
+    const vertex = this.getVertex(a, b)
+  };
 
   private removeLinkInstance(): void {}
 
@@ -132,10 +154,16 @@ export class Graph extends Events {
   startUpdate(): void {}
   finshUpdate(): void {}
   clear(): void {}
-  private recordNodeEvent(node: Node, eventName: string) {}
-  private recordLinkEvent(link: Link, eventName: string) {}
+  private recordNodeEvent(node: Edge, eventName: string) {}
+  private recordLinkEvent(link: Vertex, eventName: string) {}
 
-  private static makeLinkId(fromNodeId: NodeId, toNodeId: NodeId): string {
-    return `${fromNodeId}=>${toNodeId}`;
+  private static createVertexId(
+    fromNodeId: EdgeId,
+    toNodeId: EdgeId,
+    idx?: number
+  ): string {
+    return !(typeof idx == "number")
+      ? `${fromNodeId}=>${toNodeId}`
+      : `${fromNodeId}=>${toNodeId}@${idx}`;
   }
 }
