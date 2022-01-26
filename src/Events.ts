@@ -1,59 +1,73 @@
 import { Subscriber, EventHandler } from "./Subscriber";
 import { uniqueId } from "./Utils/UniqueId";
 
-export interface SubscriberRemoveHandler {
+export interface UnsubscribeHandler {
   token: string;
   remove: () => void;
 }
 
-export interface EventsApi {
+export interface EventsApiCore {
   on: (
     eventName: string,
     eventHandler: EventHandler,
     ctx?: any
-  ) => SubscriberRemoveHandler;
+  ) => UnsubscribeHandler;
+  off: (eventName: string, token: string) => void;
+  fire: (eventName: string, ...args: any[]) => void;
+}
+
+export interface EventsApiExtended {
   once: (
     eventName: string,
     eventHandler: EventHandler,
     ctx?: any
-  ) => SubscriberRemoveHandler;
+  ) => UnsubscribeHandler;
   exactly: (
     eventName: string,
     eventHandler: EventHandler,
     limit: number,
     ctx?: any
-  ) => SubscriberRemoveHandler;
-  off: (eventName: string, token: string) => void;
-  clear: (eventName: string) => void;
-  emit: (eventName: string, ...args: any[]) => void;
+  ) => UnsubscribeHandler;
 }
 
-export class Events implements EventsApi {
-  private _subscribers: Map<string, Map<string, Subscriber>>;
+export interface EventsApiHelpers {
+  clear: (eventName: string) => void;
+  clearAll: () => void;
+  listEvents: () => any[];
+  listEventSubscribers: (eventName: string) => any[];
+}
+
+export type Subscribers = Map<string, Map<string, Subscriber>>;
+
+export class Events
+  implements EventsApiCore, EventsApiExtended, EventsApiHelpers
+{
+  private _subscribers: Subscribers = new Map();
+
   constructor() {
-    this._subscribers = new Map();
   }
-  protected generateEventToken(): string {
+
+  // Private/Protected methods
+  protected genEvtToken(): string {
     return uniqueId();
   }
-  protected register(
+
+  protected subscribe(
     eventName: string,
-    eventHandler: EventHandler,
+    handler: EventHandler,
     limit = Infinity,
     ctx?: any
-  ): SubscriberRemoveHandler {
+  ): UnsubscribeHandler {
     if (!this._subscribers.has(eventName)) {
       this._subscribers.set(eventName, new Map([]));
     }
-
-    const token = this.generateEventToken();
-
+    const token = this.genEvtToken();
     const subscriber: Subscriber = {
       token: token,
       counter: 0,
-      hanlder: eventHandler,
-      ctx: ctx,
       limit: limit,
+      hanlder: handler,
+      ctx: ctx,
     };
 
     this._subscribers.get(eventName)?.set(token, subscriber);
@@ -63,30 +77,9 @@ export class Events implements EventsApi {
       remove: () => {
         this.unsubscribe(eventName, token);
       },
-    } as SubscriberRemoveHandler;
+    } as UnsubscribeHandler;
   }
-  public on(
-    eventName: string,
-    eventHandler: EventHandler,
-    ctx?: any
-  ): SubscriberRemoveHandler {
-    return this.register(eventName, eventHandler, Infinity, ctx);
-  }
-  public once(
-    eventName: string,
-    eventHandler: EventHandler,
-    ctx?: any
-  ): SubscriberRemoveHandler {
-    return this.register(eventName, eventHandler, 1, ctx);
-  }
-  public exactly(
-    eventName: string,
-    eventHandler: EventHandler,
-    limit = 1,
-    ctx?: any
-  ): SubscriberRemoveHandler {
-    return this.register(eventName, eventHandler, limit, ctx);
-  }
+
   protected unsubscribe(eventName: string, token: string): void {
     if (
       !this._subscribers.has(eventName) ||
@@ -99,47 +92,88 @@ export class Events implements EventsApi {
       this._subscribers.delete(eventName);
     }
   }
-  public off(eventName: string, token: string): void {
-    this.unsubscribe(eventName, token);
-  }
-  protected unregister(eventName: string): void {
-    this._subscribers.delete(eventName);
-  }
-  public clear(eventName: string): void {
-    this.unregister(eventName);
-  }
-  public clearAll(): void {
-    this._subscribers.clear();
-  }
-  public emit(eventName: string, ...args: any[]): void {
+
+  protected publish(eventName: string, ...args: any[]): void {
+    // Check first if there is any subscriber
     if (
       !this._subscribers.has(eventName) ||
       this._subscribers.get(eventName)?.size === 0
     ) {
       return;
     }
-    let hanldersToRemove: string[] = [];
-    this._subscribers.get(eventName)?.forEach((s, key) => {
-      s.hanlder.apply(s.ctx, args);
 
-      s.counter++;
-      if (s.counter >= s.limit) {
+    let hanldersToRemove: string[] = [];
+    // Process all event handlers and add any handler with
+    // execution limit for deletion
+    this._subscribers.get(eventName)?.forEach((subscriber, key) => {
+      subscriber.hanlder.apply(subscriber.ctx, args);
+
+      subscriber.counter++;
+      if (subscriber.counter >= subscriber.limit) {
         hanldersToRemove.push(key);
       }
     });
+
+    // Remove all marked event handlers that reached execution limit
     if (hanldersToRemove.length > 0) {
       hanldersToRemove.forEach((key) =>
         this._subscribers.get(eventName)?.delete(key)
       );
     }
+
+    // Remove the subscribers object if no any subscriber left
     if (this._subscribers.get(eventName)?.size === 0) {
       this._subscribers.delete(eventName);
     }
   }
-  public listRegisteredEvents(): any[] {
+
+  protected unpublish(eventName: string): void {
+    this._subscribers.delete(eventName);
+  }
+
+  // Public interface - core
+  public on(
+    eventName: string,
+    eventHandler: EventHandler,
+    ctx?: any
+  ): UnsubscribeHandler {
+    return this.subscribe(eventName, eventHandler, Infinity, ctx);
+  }
+  public off(eventName: string, token: string): void {
+    this.unsubscribe(eventName, token);
+  }
+  public fire(eventName: string, ...args: any[]): void {
+    this.publish(eventName, args);
+  }
+
+  // Public interface - extended
+  public once(
+    eventName: string,
+    eventHandler: EventHandler,
+    ctx?: any
+  ): UnsubscribeHandler {
+    return this.subscribe(eventName, eventHandler, 1, ctx);
+  }
+  public exactly(
+    eventName: string,
+    eventHandler: EventHandler,
+    limit = 1,
+    ctx?: any
+  ): UnsubscribeHandler {
+    return this.subscribe(eventName, eventHandler, limit, ctx);
+  }
+
+  // Public interface - helpers
+  public clear(eventName: string): void {
+    this.unpublish(eventName);
+  }
+  public clearAll(): void {
+    this._subscribers.clear();
+  }
+  public listEvents(): any[] {
     return [...this._subscribers.entries()];
   }
-  public listSubscribersForEvent(eventName: string): any[] {
+  public listEventSubscribers(eventName: string): any[] {
     return [...(this._subscribers.get(eventName)?.entries() || [])];
   }
 }
