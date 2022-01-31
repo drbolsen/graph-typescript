@@ -1,6 +1,7 @@
 import { Edge } from "./Edge";
 import { GraphError } from "./Error";
 import { Vertex } from "./Vertex";
+import { Events } from "./Events";
 
 type VertexMap = Record<number, Vertex>;
 type EdgeMap = Record<string, Edge>;
@@ -27,9 +28,10 @@ const vertexIdx = (v: number | Vertex) =>
   v instanceof Vertex ? (v as Vertex).idx : v;
 const edgeIdx = (v: string | Edge) => (v instanceof Edge ? (v as Edge).idx : v);
 
-export class Graph {
+export class Graph extends Events {
   [x: string]: any;
   constructor(options: GraphOptions = {}) {
+    super();
     const { opEvents = false } = options;
     this._vertices = Object.create(null) as VertexMap;
     this._edges = Object.create(null) as EdgeMap;
