@@ -60,7 +60,7 @@ export class Edge implements EdgeAPI {
       _idx: this._idx,
     };
   }
-  public static genEdgeIdx(sourceIdx: number, targetIdx: number) {
+  public static genIdx(sourceIdx: number, targetIdx: number) {
     return `${sourceIdx}=>${targetIdx}`;
   }
 }
