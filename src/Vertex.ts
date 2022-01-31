@@ -27,6 +27,9 @@ export class Vertex implements VertexAPI {
   get idx(): number {
     return this._idx;
   }
+  get kind(): number {
+    return this._kind;
+  }
   get data(): any {
     return this._data;
   }
