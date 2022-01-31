@@ -9,11 +9,17 @@
     "typescript": "^4.5.5"
   },
   "devDependencies": {
+    "@types/benchmark": "^2.1.1",
     "@types/jest": "^27.4.0",
+    "benchmark": "^2.1.4",
     "jest": "^27.4.7",
     "ts-jest": "^27.1.3"
   },
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig-cjs.json",
+    "clean": "rm -rf lib/",
+    "perfs": "rm -rf lib/ && tsc -p tsconfig.json && tsc -p tsconfig-cjs.json && node perfs/graph-construction.js",
+    "perfTest": "node perfs/graph-construction.js"
   }
 }
