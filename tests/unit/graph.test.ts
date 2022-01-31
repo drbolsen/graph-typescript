@@ -127,8 +127,6 @@ describe("Graph class", () => {
       }
     );
 
-    console.log("Graph edges : ", i.vertices);
-
     const r = i.removeEdge(edge1);
 
     expect(
@@ -137,27 +135,27 @@ describe("Graph class", () => {
       // vertex2.isOrphan
     ).toBeTruthy();
   });
-  // it("should fire `changed` events if this option is enabled", () => {
-  //   const i = new Graph({ opEvents: true });
-  //   let counter = 0;
-  //   i.on("changed", () => {
-  //     ++counter;
-  //   });
-  //   const [, vertex1] = <[GraphError, Vertex]>i.createVertex(getNextId(), {
-  //     myVertex: "vertex1",
-  //   });
-  //   const [, vertex2] = <[GraphError, Vertex]>i.createVertex(getNextId(), {
-  //     myVertex: "vertex2",
-  //   });
-  //   const [, edge1] = <[GraphError, Edge]>i.createEdge(
-  //     vertex1.idx,
-  //     vertex2.idx,
-  //     {
-  //       myEdge: "edge1",
-  //     }
-  //   );
-  //   i.removeEdge(edge1);
-  //   // Fire 4 times: add Vertex, add Vertex, add Edge, remove Edge
-  //   expect(counter === 4).toBeTruthy();
-  // });
+  it("should fire `changed` events if this option is enabled", () => {
+    const i = new Graph({ opEvents: true });
+    let counter = 0;
+    i.on("changed", () => {
+      ++counter;
+    });
+    const [, vertex1] = <[GraphError, Vertex]>i.createVertex(getNextId(), {
+      myVertex: "vertex1",
+    });
+    const [, vertex2] = <[GraphError, Vertex]>i.createVertex(getNextId(), {
+      myVertex: "vertex2",
+    });
+    const [, edge1] = <[GraphError, Edge]>i.createEdge(
+      vertex1.idx,
+      vertex2.idx,
+      {
+        myEdge: "edge1",
+      }
+    );
+    i.removeEdge(edge1);
+    // Fire 4 times: add Vertex, add Vertex, add Edge, remove Edge
+    expect(counter === 4).toBeTruthy();
+  });
 });
