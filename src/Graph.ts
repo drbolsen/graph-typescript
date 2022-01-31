@@ -1,169 +1,258 @@
-import { Events } from "./Events";
-import { VertexId, EdgeId } from "./Identity";
-import { Vertex } from "./Vertex";
 import { Edge } from "./Edge";
-import { uniqueId } from "./Utils/UniqueId";
+import { GraphError } from "./Error";
+import { Vertex } from "./Vertex";
 
-export type MaybeEdge = Edge | undefined;
-export type MaybeVertex = Vertex | undefined;
+type VertexMap = Record<number, Vertex>;
+type EdgeMap = Record<string, Edge>;
+type EdgeSiblings = Record<string, number[]>;
+interface GraphOptions {
+  opEvents?: boolean;
+}
 
-export class Graph extends Events {
-  private _edges: Map<EdgeId, Edge> = new Map();
-  private _vertices: Map<VertexId, Vertex> = new Map();
-  private _multiEdge: Map<VertexId, Set<number>> = new Map();
-  private _suspendEvents = 0;
-  private _multiGraph: boolean;
+const getNextIndex = (v: number[]): number =>
+  v.length < 1 ? 0 : <number>v.at(-1) + 1;
+const vertexIdx = (v: number | Vertex) =>
+  v instanceof Vertex ? (v as Vertex).idx : v;
+const edgeIdx = (v: string | Edge) => (v instanceof Edge ? (v as Edge).idx : v);
 
-  constructor(options: any = {}) {
-    super();
-    const { multiGraph = false } = options;
-
-    this._multiGraph = multiGraph;
+export class Graph {
+  [x: string]: any;
+  constructor(options: GraphOptions = {}) {
+    const { opEvents = false } = options;
+    this._vertices = Object.create(null) as VertexMap;
+    this._edges = Object.create(null) as EdgeMap;
+    this._edgeSiblings = Object.create(null) as EdgeSiblings;
+    this._hasOpEvents = opEvents;
+    this._stackIdx = 0;
+    this._eventsStack = [];
   }
-  private disableChanges() {
-    this._suspendEvents += 1;
+  // Vertices API
+  /**
+   * Getter, returns an array of vertices
+   */
+  public get vertices(): Vertex[] {
+    return Object.values(this._vertices as VertexMap);
   }
-  private enableChanges() {
-    this._suspendEvents -= 1;
-  }
-
-  public hasEdge(edgeId?: EdgeId): boolean {
-    return !edgeId ? false : this._edges.has(edgeId);
-  }
-  public getEdge(edgeId: EdgeId): MaybeEdge {
-    return this._edges.get(edgeId);
-  }
-  public getEdgesCount(): number {
-    return this._edges.size;
-  }
-  public getEdgeVertices(edgeId: EdgeId): Vertex[] {
-    return this.hasEdge(edgeId) ? (this.getEdge(edgeId) as Edge).vertices : [];
-  }
-
-  public hasVertex(vertexId?: string): boolean {
-    return !vertexId ? false : this._vertices.has(vertexId);
-  }
-  public getVertexById(vertexId: string): MaybeVertex {
-    return this._vertices.get(vertexId);
-  }
-  public getVertex(fromEdgeId: EdgeId, toEdgeId: EdgeId): MaybeVertex {
-    const vertexId = Graph.createVertexId(fromEdgeId, toEdgeId);
-    const multiEdge = this._multiEdge.get(vertexId);
-    const hasSiblings = !!multiEdge && multiEdge.size > 1;
-    return undefined;
-  }
-  public getVerticesCount(): number {
-    return this._vertices.size;
-  }
-  public getVertexNodes(vertexId: VertexId): [EdgeId?, EdgeId?] {
-    if (!this._vertices.has(vertexId)) {
-      return [];
+  public addVertex(vertex: Vertex): [GraphError?, Vertex?] {
+    const idx = vertexIdx(vertex);
+    const instance = this._vertices[idx];
+    if (instance) {
+      return [
+        new GraphError("Vertex with the same `idx` already exists"),
+        vertex,
+      ];
     }
-    const { from, to } = this._vertices.get(vertexId) as Vertex;
-    return [from, to];
+    this._vertices[idx] = vertex;
+    return [, vertex];
   }
-  public getVertexSiblings(vertexId: VertexId): any[] {
-    const [vertex] = Vertex.parseVertexId(vertexId);
-    const v = this._multiEdge.get(vertex)?.values() || []
-    return Array.from(v).map(idx => `${vertex}@${idx}`)
-  }
-
-  public addEdge(edgeId?: EdgeId, data?: any): Edge {
-    this.disableChanges();
-    const isNodeExist: boolean = this.hasEdge(edgeId);
-
-    const node = isNodeExist
-      ? (this.getEdge(edgeId as string) as Edge)
-      : new Edge(edgeId || uniqueId());
-
-    node.data = data;
-    this._edges.set(node.id, node);
-
-    this.recordNodeEvent(node, isNodeExist ? "update" : "add");
-
-    this.enableChanges();
-
-    return node;
-  }
-  public addVertex(fromEdgeId: EdgeId, toEdgeId: EdgeId, data?: any): Vertex {
-    this.enableChanges();
-
-    const fromNode = this.hasEdge(fromEdgeId)
-      ? (this.getEdge(fromEdgeId) as Edge)
-      : this.addEdge(fromEdgeId);
-    const toNode = this.hasEdge(toEdgeId)
-      ? (this.getEdge(toEdgeId) as Edge)
-      : this.addEdge(toEdgeId);
-
-    const multiEdgeLinkIdx = Graph.createVertexId(fromNode.id, toNode.id);
-    // No previous multi edge exists
-    if (!this._multiEdge.has(multiEdgeLinkIdx)) {
-      this._multiEdge.set(multiEdgeLinkIdx, new Set([]));
+  /**
+   * Create a new vertex with the given numeric `id`.
+   * If the vertex with this `id` already exists then return the existing instance
+   * @todo Should it return an error instead ?
+   * @param {number} idx
+   * @param {any} data
+   * @returns {[GraphError?, Vertex?]}
+   */
+  public createVertex(idx: number, data?: any): [GraphError?, Vertex?] {
+    if (!!(this._vertices as VertexMap)[idx]) {
+      return [
+        new GraphError("Duplicate vertex `idx`"),
+        <Vertex>(this._vertices as VertexMap)[idx],
+      ];
     }
-
-    const idx = this._multiEdge.get(multiEdgeLinkIdx)?.size as number;
-    this._multiEdge.get(multiEdgeLinkIdx)?.add(idx);
-    const linkId = Graph.createVertexId(fromNode.id, toNode.id, idx);
-
-    const isExist = this._vertices.has(linkId);
-    const link = isExist
-      ? (this._vertices.get(linkId) as Vertex)
-      : new Vertex(linkId, fromNode.id, toNode.id, data);
-
-    link.data = data;
-
-    this._vertices.set(linkId, link);
-    fromNode.addVertex(link);
-    if (fromNode.id !== toNode.id) {
-      toNode.addVertex(link);
-    }
-    this.recordLinkEvent(link, isExist ? "update" : "add");
-
-    this.disableChanges();
-    return link;
+    const vertex = new Vertex(idx, data);
+    (this._vertices as VertexMap)[idx] = vertex;
+    return [, vertex];
   }
-  public removeEdge(edgeId?: EdgeId): boolean {
-    if (!edgeId || !this.hasEdge(edgeId)) return false;
-    this.enableChanges();
+  /**
+   *
+   * @param vertex
+   * @returns
+   */
+  public removeVertex(vertex: number | Vertex): boolean {
+    const idx = vertexIdx(vertex);
+    const vertexToRemove = <Vertex>this._vertices[idx];
+    if (!vertexToRemove) {
+      return false;
+    }
+    const removeScope = vertexToRemove.edges;
 
-    const edge = this.getEdge(edgeId) as Edge;
-
-    edge.vertices.forEach((link) => {
-      this.removeVertex(link)
+    removeScope.forEach((edge: Edge) => {
+      this.removeEdge(edge);
     });
+    delete (this._vertices as VertexMap)[idx];
+    const result = !(this._vertices as VertexMap)[idx];
+    return result;
+  }
+  /**
+   *
+   * @param vertex
+   * @param data
+   * @returns
+   */
+  public updateVertex(
+    vertex: number | Vertex,
+    data?: any
+  ): [GraphError?, Vertex?] {
+    const idx = vertexIdx(vertex);
+    if (!this._vertices[idx]) {
+      return [new GraphError("Vertex with `idx` does not exist")];
+    }
+    const update = <Vertex>(this._vertices as VertexMap)[idx];
+    data && update.setData(data);
+    return [, update];
+  }
+  /**
+   *
+   * @param vertex
+   * @returns
+   */
+  public getVertex(vertex: number | Vertex): [GraphError?, Vertex?] {
+    const idx = vertexIdx(vertex);
+    return !!(this._vertices as VertexMap)[idx]
+      ? [, (this._vertices as VertexMap)[idx]]
+      : [new GraphError("Vertex with `idx` does not exist")];
+  }
+  // Edges API
+  /**
+   * Getter, returns an array of all edges
+   */
+  public get edges(): Edge[] {
+    return Object.values(this._edges as EdgeMap);
+  }
+  public addEdge(edge: Edge): [GraphError?, Edge?] {
+    const rootIdx = edge.rootEdgeIdx; // Set a temp local variable
+    const indices: number[] = this._edgeSiblings[rootIdx] || []; // Get reference to the existing array of siblings or set as a new array
 
-    edge.clearVertices();
+    const nextIdx = getNextIndex(indices);
+    indices.push(nextIdx);
+    this._edgeSiblings[rootIdx] = indices; // update siblings
+    edge.idx = edge.rootEdgeIdx.concat(`@${nextIdx}`);
+    this._edges[edge.idx] = edge;
+    return [, edge];
+  }
+  /**
+   * Creates(inserts) a new edge(link).
+   * @param source
+   * @param target
+   * @param data
+   * @returns
+   */
+  public createEdge(
+    source: number | Vertex,
+    target: number | Vertex,
+    data?: any
+  ): [GraphError?, Edge?] {
+    const sourceId = vertexIdx(source);
+    const targetId = vertexIdx(target);
 
-    this.disableChanges();
-    return true;
+    const createScope = [];
+    !!this._vertices[sourceId] && createScope.push(this._vertices[sourceId]); // Store reference to source vertex
+    !!this._vertices[targetId] && createScope.push(this._vertices[targetId]); // Store reference to target vertex
+    if (createScope.length < 2) {
+      return [new GraphError("One or both vertices do not exist.")];
+    }
+
+    const [s, t] = <[Vertex, Vertex]>createScope; // Extracting references via destructuring
+    const edge = new Edge(s, t, data); // Create a new edge
+    s.addEdge(edge, "source"); // link source vertex and edge
+    t.addEdge(edge, "target"); // link target vertex and edge
+    const rootIdx = edge.rootEdgeIdx; // Set a temp local variable
+    const indices: number[] = this._edgeSiblings[rootIdx] || []; // Get reference to the existing array of siblings or set as a new array
+
+    const nextIndex = getNextIndex(indices);
+    indices.push(nextIndex);
+    this._edgeSiblings[rootIdx] = indices; // update siblings
+    edge.idx = edge.rootEdgeIdx.concat(`@${nextIndex}`);
+    this._edges[edge.idx] = edge;
+    return [, edge];
+  }
+  /**
+   *
+   * @param edge
+   * @returns
+   */
+  public removeEdge(edge: string | Edge): boolean {
+    const idx = edgeIdx(edge);
+    const edgeToRemove: Edge = (this._edges as EdgeMap)[idx];
+    if (!edgeToRemove) {
+      return false;
+    }
+    const [sourceIdx, targetIdx] =
+      <[number, number]>(edgeToRemove as Edge).vertices || [];
+
+    const removeScope: Vertex[] = [];
+    !!this._vertices[sourceIdx] &&
+      removeScope.push((this._vertices as VertexMap)[sourceIdx]);
+    !!this._vertices[targetIdx] &&
+      removeScope.push((this._vertices as VertexMap)[targetIdx]);
+
+    removeScope.forEach((vertex) => {
+      vertex.removeEdge(edgeToRemove as Edge);
+    });
+    const indexes: string[] =
+      this._edgeSiblings[(edgeToRemove as Edge).rootEdgeIdx] || [];
+
+    const [, instanceIdx] = (edgeToRemove as Edge).idx.split("@");
+    indexes.splice(parseInt(instanceIdx, 10), 1);
+    this._edgeSiblings[(edgeToRemove as Edge).rootEdgeIdx] = indexes;
+    delete this._edges[(edgeToRemove as Edge).idx];
+    const result = !this._edges[(edgeToRemove as Edge).idx];
+    return result;
+  }
+  /**
+   *
+   * @param edge
+   * @param data
+   * @returns
+   */
+  public updateEdge(edge: string | Edge, data?: any): [GraphError?, Edge?] {
+    const idx = edgeIdx(edge);
+    if (!this._edges[idx]) {
+      return [new GraphError("Edge with `idx` does not exist")];
+    }
+    const update = <Edge>this._edges[idx];
+    update && update.setData(data);
+    return [, update];
+  }
+  /**
+   *
+   * @param edge
+   * @returns
+   */
+  public getEdge(edge: string | Edge): [GraphError?, Edge?] {
+    const idx = edgeIdx(edge);
+    return !!this._edges[idx]
+      ? [, this._edges[idx]]
+      : [new GraphError("Edge with `idx` does not exist")];
+  }
+  /**
+   * Removes all edges
+   */
+  public cleanEdges(): void {
+    this._edges = Object.create(null) as EdgeMap;
+    this._edgeSiblings = Object.create(null) as EdgeSiblings;
+    Object.values(this._vertices as VertexMap).forEach((v) => v.cleanEdges());
   }
 
-  public removeVertex(a: Vertex): void
-  public removeVertex(a: EdgeId, b?: EdgeId): void
-  public removeVertex(a: any, b?: any): void {
-    const vertexId = a instanceof Vertex ? a.id : Graph.createVertexId(a, b);
-    const vertex = this.getVertex(a, b)
-  };
+  // Query and basic metrics API
+  public hasVertex(vertex: number | Vertex): boolean {
+    const idx = vertexIdx(vertex);
+    return !!(this._vertices as VertexMap)[idx];
+  }
+  public hasEdge(edge: string | Edge): boolean {
+    const idx = edgeIdx(edge);
+    return !!(this._edges as EdgeMap)[idx];
+  }
+  public verticesCount(): number {
+    return Object.keys(this._vertices as VertexMap).length;
+  }
+  public edgesCount(): number {
+    return Object.keys(this._edges as EdgeMap).length;
+  }
 
-  private removeLinkInstance(): void {}
-
-  getLinks(): void {}
-  forEachNode(): void {}
-  forEachLinkedNode(): void {}
-  forEachLink(): void {}
-  startUpdate(): void {}
-  finshUpdate(): void {}
-  clear(): void {}
-  private recordNodeEvent(node: Edge, eventName: string) {}
-  private recordLinkEvent(link: Vertex, eventName: string) {}
-
-  private static createVertexId(
-    fromNodeId: EdgeId,
-    toNodeId: EdgeId,
-    idx?: number
-  ): string {
-    return !(typeof idx == "number")
-      ? `${fromNodeId}=>${toNodeId}`
-      : `${fromNodeId}=>${toNodeId}@${idx}`;
+  // Serialisation API
+  public toObject(): Record<string, any> {
+    return {};
   }
 }

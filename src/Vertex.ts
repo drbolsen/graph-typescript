@@ -1,61 +1,86 @@
-import { isRequired } from "./FunctionUtils";
-import { VertexId, EdgeId } from "./Identity";
-import { uniqueId } from "./Utils/UniqueId";
+import { Edge } from "./Edge";
 
-export class Vertex {
-  #uniqueId = uniqueId();
-  #id: VertexId;
-  #fromEdgeId: EdgeId;
-  #toEdgeId: EdgeId;
-  #data: any;
+type EdgesMap = Record<string, [Edge, string]>;
 
-  constructor(
-    vertexId: VertexId,
-    fromEdgeId: EdgeId,
-    toEdgeId: EdgeId,
-    data?: any
-  ) {
-    !vertexId && isRequired("vertexId");
-    !fromEdgeId && isRequired("fromEdgeId");
-    !toEdgeId && isRequired("toEdgeId");
+export interface VertexAPI {
+  idx: number;
+  data: any;
+  edges: Edge[];
+  isOrphan: boolean;
+  isLoose: boolean;
+  addEdge: (edge: Edge, direction: string) => void;
+  removeEdge: (edge: Edge) => void;
+  hasEdge: (edge: Edge) => boolean;
+  getNeighbours: () => number[];
+  setData: (d: any) => Vertex;
+  toObject: () => Record<string, unknown>;
+}
 
-    this.#id = vertexId;
-    this.#fromEdgeId = fromEdgeId;
-    this.#toEdgeId = toEdgeId;
-    this.#data = data;
+export class Vertex implements VertexAPI {
+  [x: string]: any;
+  constructor(idx: number, data?: any) {
+    this._idx = idx;
+    this._kind = 0;
+    this._edges = Object.create(null) as EdgesMap;
+    this._data = data;
   }
-  public get id(): string {
-    return this.#id;
+  get idx(): number {
+    return this._idx;
   }
-  public get data(): any {
-    return this.#data;
+  get data(): any {
+    return this._data;
   }
-  public set data(data: any) {
-    this.#data = data;
+  set data(d: any) {
+    this._data = d;
   }
-  public get from(): EdgeId {
-    return this.#fromEdgeId;
+  get edges(): Edge[] {
+    return Object.values(this._edges as EdgesMap).map((v) => {
+      const [edge] = v;
+      return edge;
+    });
   }
-  public get to(): EdgeId {
-    return this.#toEdgeId;
+  get isOrphan(): boolean {
+    return Object.values(this._edges as EdgesMap).every((v) => {
+      const [, direction] = v;
+      return direction !== "source";
+    });
   }
-  static createVertexId(
-    fromEdgeId: EdgeId,
-    toEdgeId: EdgeId,
-    idx?: number
-  ): VertexId {
-    return !(typeof idx === "number")
-      ? `${fromEdgeId}=>${toEdgeId}`
-      : `${fromEdgeId}=>${toEdgeId}@${idx}`;
+  get isLoose(): boolean {
+    return Object.values(this._edges as EdgesMap).every((v) => {
+      const [, direction] = v;
+      return direction !== "target";
+    });
   }
-  static parseVertexId(vertexId: VertexId): [string, number] {
-    const [vertex, id] = vertexId.split("@");
-    return [vertex, parseInt(id, 10)];
+  public addEdge(edge: Edge, direction: string) {
+    this._edges[edge.idx] = [edge, direction];
   }
-  compare(uniqueId: string): boolean {
-    return this.#uniqueId === uniqueId;
+  public removeEdge(edge: Edge) {
+    delete this._edges[edge.idx];
   }
-  uniqueId(): string {
-    return this.#id;
+  public cleanEdges(): void {
+    this._edges = Object.create(null) as EdgesMap;
+  }
+  public hasEdge(edge: Edge): boolean {
+    return !!this._edges[edge.idx];
+  }
+  public getNeighbours(): number[] {
+    return Object.values(this._edges as EdgesMap).reduce((acc, v) => {
+      const [edge, direction] = v;
+      if (direction === "source") {
+        acc.push(edge.target.idx);
+      }
+      return acc;
+    }, [] as number[]);
+  }
+  public setData(d: any): Vertex {
+    if (d) {
+      this._data = d;
+    }
+    return this;
+  }
+  public toObject(): Record<string, unknown> {
+    return {
+      _idx: this._idx,
+    };
   }
 }

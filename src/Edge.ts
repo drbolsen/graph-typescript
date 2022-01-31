@@ -1,64 +1,63 @@
-import { isRequired } from "./FunctionUtils";
-import { MaybeVertex } from "./Graph";
-import { VertexId, EdgeId } from "./Identity";
-import { uniqueId } from "./Utils/UniqueId";
 import { Vertex } from "./Vertex";
 
-export class Edge {
-  #uniqueId = uniqueId();
-  #id: EdgeId;
-  #data: any;
-  #vertices: Map<VertexId, Vertex> = new Map([]);
+export interface EdgeAPI {
+  idx: string;
+  source: Vertex;
+  target: Vertex;
+  vertices: [number, number];
+  isDangling: boolean;
+  rootEdgeIdx: string;
+  setData: (d: any) => Edge;
+}
 
-  constructor(edgeId: EdgeId, data?: any) {
-    !edgeId && isRequired("edgeId");
-
-    this.#id = edgeId;
-    this.#data = data;
+export class Edge implements EdgeAPI {
+  [x: string]: any;
+  constructor(source: Vertex, target: Vertex, data?: any) {
+    this._idx = `${source.idx}=>${target.idx}`;
+    this._kind = 1;
+    this._source = source;
+    this._target = target;
+    this._data = data;
   }
-  public get id(): EdgeId {
-    return this.#id;
+  public get idx(): string {
+    return this._idx;
   }
-  public get data(): any {
-    return this.#data;
+  public set idx(s: string) {
+    this._idx = s;
   }
-  public set data(data: any) {
-    this.#data = data;
+  public get source(): Vertex {
+    return this._source;
   }
-  public get vertices(): Vertex[] {
-    return this.#vertices && this.#vertices.size > 0
-      ? [...this.#vertices.values()]
-      : [];
+  public set source(s: Vertex) {
+    this._source = s;
   }
-  public addVertex(vertex: Vertex): boolean {
-    this.#vertices.set(vertex.id, vertex);
-    return this.#vertices.has(vertex.id);
+  public get target(): Vertex {
+    return this._target;
   }
-  public removeVertex(vertex: Vertex): boolean {
-    return this.#vertices.delete(vertex.id);
+  public set target(t: Vertex) {
+    this._target = t;
   }
-  public getVertex(vertexId: VertexId): MaybeVertex {
-    return this.#vertices.get(vertexId);
+  public get vertices(): [number, number] {
+    return [(this._source as Vertex).idx, (this._target as Vertex).idx];
   }
-  public getAdjacentEdgeCount(): number {
-    const edges = [...this.#vertices.values()].flatMap((v) => {
-      const result = [];
-      v.to !== this.#id && result.push(v.to);
-      v.from !== this.#id && result.push(v.from);
-      return result;
-    });
-    return new Set(edges).size;
+  public get isDangling(): boolean {
+    return !this._source || !this._target;
   }
-  public getVerticesCount(): number {
-    return this.#vertices.size;
+  public get rootEdgeIdx(): string {
+    return this.isDangling ? "" : `${this._source.idx}=>${this._target.idx}`;
   }
-  public clearVertices(): void {
-    this.#vertices.clear();
+  public setData(data?: any): Edge {
+    if (data) {
+      this.data = data;
+    }
+    return this;
   }
-  compare(uniqueId: string): boolean {
-    return this.#uniqueId === uniqueId;
+  public toObject(): Record<string, unknown> {
+    return {
+      _idx: this._idx,
+    };
   }
-  uniqueId(): string {
-    return this.#uniqueId;
+  public static genEdgeIdx(sourceIdx: number, targetIdx: number) {
+    return `${sourceIdx}=>${targetIdx}`;
   }
 }

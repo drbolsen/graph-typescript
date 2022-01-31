@@ -5,9 +5,9 @@ const k4 = () => {
 };
 
 export const uniqueId =
-  window && window.crypto && window.crypto.randomUUID
+typeof window !== 'undefined' && window.crypto && (window.crypto as any).randomUUID
     ? (): string => {
-        return window.crypto.randomUUID();
+        return (window.crypto as any).randomUUID();
       }
     : (): string => {
         return `${k4()}${k4()}-${k4()}-${k4()}-${k4()}-${k4()}${k4()}${k4()}`;
