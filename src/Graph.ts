@@ -5,8 +5,20 @@ import { Vertex } from "./Vertex";
 type VertexMap = Record<number, Vertex>;
 type EdgeMap = Record<string, Edge>;
 type EdgeSiblings = Record<string, number[]>;
-interface GraphOptions {
+
+enum CellType {
+  vertex,
+  edge,
+}
+type Cell = Vertex | Edge;
+
+export interface GraphOptions {
   opEvents?: boolean;
+}
+interface EventStackFrame {
+  cell: Cell;
+  kind: string;
+  type: String;
 }
 
 const getNextIndex = (v: number[]): number =>
@@ -42,7 +54,10 @@ export class Graph {
         vertex,
       ];
     }
+    this.startGrabbingEvents();
     this._vertices[idx] = vertex;
+    this.pushEvent(vertex, "add");
+    this.stopGrabbingEvents();
     return [, vertex];
   }
   /**
@@ -60,8 +75,11 @@ export class Graph {
         <Vertex>(this._vertices as VertexMap)[idx],
       ];
     }
+    this.startGrabbingEvents();
     const vertex = new Vertex(idx, data);
     (this._vertices as VertexMap)[idx] = vertex;
+    this.pushEvent(vertex, "create");
+    this.stopGrabbingEvents();
     return [, vertex];
   }
   /**
@@ -76,12 +94,14 @@ export class Graph {
       return false;
     }
     const removeScope = vertexToRemove.edges;
-
+    this.startGrabbingEvents();
     removeScope.forEach((edge: Edge) => {
       this.removeEdge(edge);
     });
     delete (this._vertices as VertexMap)[idx];
     const result = !(this._vertices as VertexMap)[idx];
+    this.pushEvent(vertexToRemove, "remove");
+    this.stopGrabbingEvents();
     return result;
   }
   /**
@@ -99,7 +119,10 @@ export class Graph {
       return [new GraphError("Vertex with `idx` does not exist")];
     }
     const update = <Vertex>(this._vertices as VertexMap)[idx];
+    this.startGrabbingEvents();
     data && update.setData(data);
+    this.pushEvent(update, "change:data");
+    this.stopGrabbingEvents();
     return [, update];
   }
   /**
@@ -121,14 +144,17 @@ export class Graph {
     return Object.values(this._edges as EdgeMap);
   }
   public addEdge(edge: Edge): [GraphError?, Edge?] {
-    const rootIdx = edge.rootEdgeIdx; // Set a temp local variable
+    const rootIdx = edge.rootIdx; // Set a temp local variable
     const indices: number[] = this._edgeSiblings[rootIdx] || []; // Get reference to the existing array of siblings or set as a new array
 
     const nextIdx = getNextIndex(indices);
     indices.push(nextIdx);
+    this.startGrabbingEvents();
     this._edgeSiblings[rootIdx] = indices; // update siblings
-    edge.idx = edge.rootEdgeIdx.concat(`@${nextIdx}`);
+    edge.idx = edge.rootIdx.concat(`@${nextIdx}`);
     this._edges[edge.idx] = edge;
+    this.pushEvent(edge, "add");
+    this.stopGrabbingEvents();
     return [, edge];
   }
   /**
@@ -154,17 +180,20 @@ export class Graph {
     }
 
     const [s, t] = <[Vertex, Vertex]>createScope; // Extracting references via destructuring
+    this.startGrabbingEvents();
     const edge = new Edge(s, t, data); // Create a new edge
     s.addEdge(edge, "source"); // link source vertex and edge
     t.addEdge(edge, "target"); // link target vertex and edge
-    const rootIdx = edge.rootEdgeIdx; // Set a temp local variable
+    const rootIdx = edge.rootIdx; // Set a temp local variable
     const indices: number[] = this._edgeSiblings[rootIdx] || []; // Get reference to the existing array of siblings or set as a new array
 
     const nextIndex = getNextIndex(indices);
     indices.push(nextIndex);
     this._edgeSiblings[rootIdx] = indices; // update siblings
-    edge.idx = edge.rootEdgeIdx.concat(`@${nextIndex}`);
+    edge.idx = edge.rootIdx.concat(`@${nextIndex}`);
     this._edges[edge.idx] = edge;
+    this.pushEvent(edge, "create");
+    this.stopGrabbingEvents();
     return [, edge];
   }
   /**
@@ -186,18 +215,20 @@ export class Graph {
       removeScope.push((this._vertices as VertexMap)[sourceIdx]);
     !!this._vertices[targetIdx] &&
       removeScope.push((this._vertices as VertexMap)[targetIdx]);
-
+    this.startGrabbingEvents();
     removeScope.forEach((vertex) => {
       vertex.removeEdge(edgeToRemove as Edge);
     });
     const indexes: string[] =
-      this._edgeSiblings[(edgeToRemove as Edge).rootEdgeIdx] || [];
+      this._edgeSiblings[(edgeToRemove as Edge).rootIdx] || [];
 
     const [, instanceIdx] = (edgeToRemove as Edge).idx.split("@");
     indexes.splice(parseInt(instanceIdx, 10), 1);
-    this._edgeSiblings[(edgeToRemove as Edge).rootEdgeIdx] = indexes;
+    this._edgeSiblings[(edgeToRemove as Edge).rootIdx] = indexes;
     delete this._edges[(edgeToRemove as Edge).idx];
     const result = !this._edges[(edgeToRemove as Edge).idx];
+    this.pushEvent(edgeToRemove, "remove");
+    this.stopGrabbingEvents();
     return result;
   }
   /**
@@ -212,7 +243,10 @@ export class Graph {
       return [new GraphError("Edge with `idx` does not exist")];
     }
     const update = <Edge>this._edges[idx];
+    this.startGrabbingEvents();
     update && update.setData(data);
+    this.pushEvent(update, "change:data");
+    this.stopGrabbingEvents();
     return [, update];
   }
   /**
@@ -254,5 +288,28 @@ export class Graph {
   // Serialisation API
   public toObject(): Record<string, any> {
     return {};
+  }
+
+  // Events API
+  private startGrabbingEvents() {
+    this._stackIdx += 1;
+  }
+  private stopGrabbingEvents() {
+    this._stackIdx -= 1;
+    if (this._stackIdx === 0 && this._eventsStack.length > 0) {
+      this.fire("changed", ...this._eventsStack);
+      this._eventsStack.length = 0;
+    }
+  }
+  private pushEvent(cell: Cell, eventName: string) {
+    if (!this._hasOpEvents) {
+      return;
+    }
+    const record: EventStackFrame = {
+      cell: cell,
+      kind: CellType[cell.kind],
+      type: eventName,
+    };
+    this._eventsStack.push(record);
   }
 }
