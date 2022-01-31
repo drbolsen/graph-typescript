@@ -6,7 +6,7 @@ export interface EdgeAPI {
   target: Vertex;
   vertices: [number, number];
   isDangling: boolean;
-  rootEdgeIdx: string;
+  rootIdx: string;
   setData: (d: any) => Edge;
 }
 
@@ -24,6 +24,9 @@ export class Edge implements EdgeAPI {
   }
   public set idx(s: string) {
     this._idx = s;
+  }
+  public get kind(): number {
+    return this._kind;
   }
   public get source(): Vertex {
     return this._source;
@@ -43,7 +46,7 @@ export class Edge implements EdgeAPI {
   public get isDangling(): boolean {
     return !this._source || !this._target;
   }
-  public get rootEdgeIdx(): string {
+  public get rootIdx(): string {
     return this.isDangling ? "" : `${this._source.idx}=>${this._target.idx}`;
   }
   public setData(data?: any): Edge {
