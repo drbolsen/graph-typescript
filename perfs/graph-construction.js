@@ -5,7 +5,7 @@ const suite = new Benchmark.Suite();
 // Mock up a graph with 5000 disconneted vertices
 const graph = new Graph();
 for (let k = 0; k < 5001; ++k) {
-  v = new Vertex(k);
+  v = new Vertex(k, { data: k });
   graph.addVertex(v);
 }
 
@@ -75,6 +75,9 @@ suite.add(
   },
   {
     onCycle: () => {},
+    onComplete: () => {
+      console.log("Graph : ", graph.vertices.filter(v => !v.isLoose || !v.isOrphan));
+    },
   }
 );
 
