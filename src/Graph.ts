@@ -38,7 +38,7 @@ export class Graph extends Events {
     this._edgeSiblings = Object.create(null) as EdgeSiblings;
     this._hasOpEvents = opEvents;
     this._stackIdx = 0;
-    this._eventsStack = [];
+    this._eventsStack = [] as EventStackFrame[];
   }
   // Vertices API
   /**
@@ -49,8 +49,8 @@ export class Graph extends Events {
   }
   public addVertex(vertex: Vertex): [GraphError?, Vertex?] {
     const idx = vertexIdx(vertex);
-    const instance = this._vertices[idx];
-    if (instance) {
+    const instance = (this._vertices as VertexMap)[idx];
+    if (!!instance) {
       return [
         new GraphError("Vertex with the same `idx` already exists"),
         vertex,
@@ -147,14 +147,14 @@ export class Graph extends Events {
   }
   public addEdge(edge: Edge): [GraphError?, Edge?] {
     const rootIdx = edge.rootIdx; // Set a temp local variable
-    const indices: number[] = this._edgeSiblings[rootIdx] || []; // Get reference to the existing array of siblings or set as a new array
+    const indices: number[] = (this._edgeSiblings as EdgeSiblings)[rootIdx] || []; // Get reference to the existing array of siblings or set as a new array
 
+    this.startGrabbingEvents();
     const nextIdx = getNextIndex(indices);
     indices.push(nextIdx);
-    this.startGrabbingEvents();
-    this._edgeSiblings[rootIdx] = indices; // update siblings
+    (this._edgeSiblings as EdgeSiblings)[rootIdx] = indices; // update siblings
     edge.idx = edge.rootIdx.concat(`@${nextIdx}`);
-    this._edges[edge.idx] = edge;
+    (this._edges as EdgeMap)[edge.idx] = edge;
     this.pushEvent(edge, "add");
     this.stopGrabbingEvents();
     return [, edge];
