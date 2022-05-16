@@ -34,49 +34,79 @@ suite.add(
   }
 );
 
+stopper = 0;
+cycles = 0;
+counter = 0;
 suite.add(
-  "Alternative test",
+  "Create 5,000 vertices and 5,000 edges",
   () => {
     const graph1 = new Graph();
+    if (stopper < 1) {
+      for (let k = 0; k < 5001; ++k) {
+        graph1.createVertex(k);
+      }
+      for (let i = 0; i < 5000; ++i) {
+        graph1.createEdge(i, i + 1);
+      }
+      ++cycles;
+    }
+    ++stopper;
+  },
+  {
+    onCycle: () => {
+      stopper = 0;
+      ++counter;
+    },
+  }
+);
+
+stopper = 0;
+cycles = 0;
+counter = 0;
+suite.add("Create 5,000 vertices and add them to 5,000 edges", () => {
+  const graph1 = new Graph();
+  if (stopper < 1) {
     for (let k = 0; k < 5001; ++k) {
       graph1.createVertex(k);
     }
     for (let i = 0; i < 5000; ++i) {
-      graph1.createEdge(i, i + 1);
+      const [, v1] = graph1.getVertex(i);
+      const [, v2] = graph1.getVertex(i + 1);
+      const e = new Edge(v1, v2);
+      v1.addEdge(e);
+      v2.addEdge(e);
+      graph1.addEdge(e);
     }
-  },
-  {
-    onCycle: () => {},
+    ++cycles;
   }
-);
-
-suite.add("Alternative test with addEdge", () => {
-  const graph1 = new Graph();
-  for (let k = 0; k < 5001; ++k) {
-    graph1.createVertex(k);
-  }
-  for (let i = 0; i < 5000; ++i) {
-    const [, v1] = graph1.getVertex(i);
-    const [, v2] = graph1.getVertex(i + 1);
-    const e = new Edge(v1, v2);
-    v1.addEdge(e);
-    v2.addEdge(e);
-    graph1.addEdge(e);
+  ++stopper
+}, {
+  onCycle: () => {
+    stopper = 0;
+    ++counter;    
   }
 });
 
+stopper = 0;
+cycles = 0;
+counter = 0;
 suite.add(
-  "Alternative test with clean edges",
+  "Create 5,000 edges and clean them all",
   () => {
-    for (let i = 0; i < 5000; ++i) {
-      graph.createEdge(i, i + 1);
+    const graph1 = new Graph();
+    if (stopper < 1) {
+      for (let i = 0; i < 5000; ++i) {
+        graph1.createEdge(i, i + 1);
+      }
+      graph1.cleanEdges();
+      ++cycles;
     }
-    graph.cleanEdges();
+    ++stopper;
   },
   {
-    onCycle: () => {},
-    onComplete: () => {
-      console.log("Graph : ", graph.vertices.filter(v => !v.isLoose || !v.isOrphan));
+    onCycle: () => {
+      stopper = 0;
+      ++counter;
     },
   }
 );
