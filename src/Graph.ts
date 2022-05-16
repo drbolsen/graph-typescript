@@ -56,10 +56,10 @@ export class Graph extends Events {
         vertex,
       ];
     }
-    this.startGrabbingEvents();
+    this.startCaptureEvents();
     this._vertices[idx] = vertex;
     this.pushEvent(vertex, "add");
-    this.stopGrabbingEvents();
+    this.stopCaptureEvents();
     return [, vertex];
   }
   /**
@@ -77,11 +77,11 @@ export class Graph extends Events {
         <Vertex>(this._vertices as VertexMap)[idx],
       ];
     }
-    this.startGrabbingEvents();
+    this.startCaptureEvents();
     const vertex = new Vertex(idx, data);
     (this._vertices as VertexMap)[idx] = vertex;
     this.pushEvent(vertex, "create");
-    this.stopGrabbingEvents();
+    this.stopCaptureEvents();
     return [, vertex];
   }
   /**
@@ -96,14 +96,14 @@ export class Graph extends Events {
       return false;
     }
     const removeScope = vertexToRemove.edges;
-    this.startGrabbingEvents();
+    this.startCaptureEvents();
     removeScope.forEach((edge: Edge) => {
       this.removeEdge(edge);
     });
     delete (this._vertices as VertexMap)[idx];
     const result = !(this._vertices as VertexMap)[idx];
     this.pushEvent(vertexToRemove, "remove");
-    this.stopGrabbingEvents();
+    this.stopCaptureEvents();
     return result;
   }
   /**
@@ -121,10 +121,10 @@ export class Graph extends Events {
       return [new GraphError("Vertex with `idx` does not exist")];
     }
     const update = <Vertex>(this._vertices as VertexMap)[idx];
-    this.startGrabbingEvents();
+    this.startCaptureEvents();
     data && update.setData(data);
     this.pushEvent(update, "change:data");
-    this.stopGrabbingEvents();
+    this.stopCaptureEvents();
     return [, update];
   }
   /**
@@ -149,14 +149,14 @@ export class Graph extends Events {
     const rootIdx = edge.rootIdx; // Set a temp local variable
     const indices: number[] = (this._edgeSiblings as EdgeSiblings)[rootIdx] || []; // Get reference to the existing array of siblings or set as a new array
 
-    this.startGrabbingEvents();
+    this.startCaptureEvents();
     const nextIdx = getNextIndex(indices);
     indices.push(nextIdx);
     (this._edgeSiblings as EdgeSiblings)[rootIdx] = indices; // update siblings
     edge.idx = edge.rootIdx.concat(`@${nextIdx}`);
     (this._edges as EdgeMap)[edge.idx] = edge;
     this.pushEvent(edge, "add");
-    this.stopGrabbingEvents();
+    this.stopCaptureEvents();
     return [, edge];
   }
   /**
@@ -182,7 +182,7 @@ export class Graph extends Events {
     }
 
     const [s, t] = <[Vertex, Vertex]>createScope; // Extracting references via destructuring
-    this.startGrabbingEvents();
+    this.startCaptureEvents();
     const edge = new Edge(s, t, data); // Create a new edge
     s.addEdge(edge, "source"); // link source vertex and edge
     t.addEdge(edge, "target"); // link target vertex and edge
@@ -195,7 +195,7 @@ export class Graph extends Events {
     edge.idx = edge.rootIdx.concat(`@${nextIndex}`);
     this._edges[edge.idx] = edge;
     this.pushEvent(edge, "create");
-    this.stopGrabbingEvents();
+    this.stopCaptureEvents();
     return [, edge];
   }
   /**
@@ -217,7 +217,7 @@ export class Graph extends Events {
       removeScope.push((this._vertices as VertexMap)[sourceIdx]);
     !!this._vertices[targetIdx] &&
       removeScope.push((this._vertices as VertexMap)[targetIdx]);
-    this.startGrabbingEvents();
+    this.startCaptureEvents();
     removeScope.forEach((vertex) => {
       vertex.removeEdge(edgeToRemove as Edge);
     });
@@ -230,7 +230,7 @@ export class Graph extends Events {
     delete this._edges[(edgeToRemove as Edge).idx];
     const result = !this._edges[(edgeToRemove as Edge).idx];
     this.pushEvent(edgeToRemove, "remove");
-    this.stopGrabbingEvents();
+    this.stopCaptureEvents();
     return result;
   }
   /**
@@ -245,10 +245,10 @@ export class Graph extends Events {
       return [new GraphError("Edge with `idx` does not exist")];
     }
     const update = <Edge>this._edges[idx];
-    this.startGrabbingEvents();
+    this.startCaptureEvents();
     update && update.setData(data);
     this.pushEvent(update, "change:data");
-    this.stopGrabbingEvents();
+    this.stopCaptureEvents();
     return [, update];
   }
   /**
@@ -293,10 +293,10 @@ export class Graph extends Events {
   }
 
   // Events API
-  private startGrabbingEvents() {
+  private startCaptureEvents() {
     this._stackIdx += 1;
   }
-  private stopGrabbingEvents() {
+  private stopCaptureEvents() {
     this._stackIdx -= 1;
     if (this._stackIdx === 0 && this._eventsStack.length > 0) {
       this.fire("changed", ...this._eventsStack);
