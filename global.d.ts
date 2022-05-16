@@ -5,5 +5,6 @@ declare global {
 }
 
 
-
-export {}
+export {
+  Crypto
+}
