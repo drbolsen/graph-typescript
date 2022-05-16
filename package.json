@@ -21,7 +21,7 @@
     "test": "jest",
     "build": "tsc -p tsconfig.json && tsc -p tsconfig-cjs.json",
     "clean": "rm -rf lib/",
-    "perfs": "rm -rf lib/ && tsc -p tsconfig.json && tsc -p tsconfig-cjs.json && node perfs/graph-construction.js",
+    "perfs": "yarn clean && yarn build && node perfs/graph-construction.js",
     "perfTest": "node perfs/graph-construction.js",
     "prepublish": "yarn build"
   }
