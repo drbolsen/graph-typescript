@@ -47,9 +47,49 @@ const Graph = require('graph-typescript')
 
 ## Usage
 
-The library exposed three classes **Graph**, **Vertex(node)**, and **Edge(link)**
+The library provides three classes **Graph**, **Vertex(node)**, and **Edge(link)** along with supporting types and utilities.
 
 **Graph** class exposes all necessary methods for creating, updating or removing edges/vertices directly on the graph.
+```js
+const graph = new Graph();
+
+/**
+ * Create a new vertex(node)
+*/
+const [vertex, error] = graph.createVertex(id, data);
+if (error) {
+  // handle error 
+}
+
+/**
+ * Update the vertex(node)
+*/
+const [, error] = graph.updateVertex(vertex, data);
+
+/**
+ * Remove the vertex(node)
+*/
+const [,error] = graph.removeVertex(vertex);
+
+
+/**
+ * Create a new edge(link)
+*/
+const vertex1 = graph.vertices.find((vertex: Vertex) => vertex.idx === idx1);
+const vertex2 = graph.vertices.find((vertex: Vertex) => vertex.idx === idx2);
+
+const [edge, error] = graph.createEdge(vertex1, vertex2, data);
+
+/**
+ * Update the edge(link)
+*/
+const [, error] = graph.updateEdge(edge, data);
+
+/**
+ * Remove the edge(link)
+*/
+const[, error] = graph.removeEdge(edge);
+```
 
 Altertantively, **Vertex** and **Edge** classes can be used to instanciate new vertices or edges separetly however new instances must be added to the graph using either **addVertex** or **addEdge** methpds.
 It might be handy when you need to provision a temporally instance, e.g. a temporary edge between two vertices. Once the new instance is validated and confirmed it can be added to the graph. 
