@@ -6,13 +6,41 @@ The library implements an extended adjacent list algorithm. It might use a bit m
 
 The core graph class also implements a simple event emitter. This allows a simple notification in graph changes. It is a useful feature for integrating the library with other modules. For example I used this library in Vue-based flow-editor <link>
 
-`const graph = new Graph({ opEvents: true })`
-` `
-`graph.on('changed', (graph) => {`
-`  graphState.value = graph;`
-`})`
+```js
+const graph = new Graph({ opEvents: true });
+
+graph.on('changed', (graph) => {
+  graphState.value = graph;
+});
+
+```
 
 ## Installation
+Add the library to your project either as a **Commonjs** module
+
+```html
+<script src=""></script> 
+```
+
+Or as an ES module. Install first, using **npm**
+
+```sh
+npm install graph-typescript
+```
+
+using **yarn**
+```sh
+yarn add graph-typescript
+```
+
+Then import the module
+```js
+import { Graph } from 'graph-typescript'
+
+...
+
+const Graph = require('graph-typescript')
+```
 
 ## Usage
 
